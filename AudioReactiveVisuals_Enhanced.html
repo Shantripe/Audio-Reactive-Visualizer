@@ -1,0 +1,1037 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Audio Reactive Visuals - Enhanced</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #000; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #fff; display: flex; width: 100vw; height: 100vh; }
+#canvas-container { flex: 1; position: relative; }
+canvas { display: block; width: 100%; height: 100%; }
+#ui { width: 340px; min-width: 340px; height: 100vh; background: rgba(10,10,20,0.97); border-left: 1px solid rgba(255,255,255,0.1); padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 20px; }
+#ui::-webkit-scrollbar { width: 4px; }
+#ui::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 2px; }
+h1 { font-size: 20px; font-weight: 700; background: linear-gradient(135deg,#667eea,#764ba2); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.subtitle { font-size: 11px; color: rgba(255,255,255,0.4); margin-top: 4px; }
+.section-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: rgba(255,255,255,0.5); margin-bottom: 10px; }
+#upload-btn { width: 100%; padding: 14px; background: linear-gradient(135deg,#667eea,#764ba2); border: none; border-radius: 8px; color: #fff; font-size: 14px; font-weight: 600; cursor: pointer; transition: opacity 0.2s; }
+#upload-btn:hover { opacity: 0.85; }
+#file-name { font-size: 12px; color: rgba(255,255,255,0.6); margin-top: 8px; word-break: break-all; min-height: 16px; }
+#play-btn { width: 56px; height: 56px; border-radius: 50%; background: linear-gradient(135deg,#667eea,#764ba2); border: none; color: #fff; font-size: 20px; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; box-shadow: 0 4px 15px rgba(102,126,234,0.4); }
+#play-btn:hover { transform: scale(1.08); box-shadow: 0 6px 20px rgba(102,126,234,0.6); }
+#play-btn.playing { background: linear-gradient(135deg,#f093fb,#f5576c); }
+.playback-row { display: flex; align-items: center; gap: 12px; }
+#time-display { font-size: 14px; font-weight: 500; color: rgba(255,255,255,0.85); flex: 1; }
+#seek { width: 100%; height: 5px; border-radius: 3px; background: rgba(255,255,255,0.1); outline: none; -webkit-appearance: none; cursor: pointer; }
+#seek::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%; background: linear-gradient(135deg,#667eea,#764ba2); cursor: pointer; }
+.mode-btn { width: 100%; padding: 10px 12px; background: rgba(255,255,255,0.05); border: 2px solid rgba(255,255,255,0.1); border-radius: 8px; color: #fff; cursor: pointer; text-align: left; transition: all 0.2s; font-size: 13px; font-weight: 600; }
+.mode-btn:hover { background: rgba(255,255,255,0.1); transform: translateX(4px); }
+.mode-btn.active { background: rgba(102,126,234,0.25); border-color: #667eea; box-shadow: 0 0 16px rgba(102,126,234,0.3); }
+.mode-btn small { display: block; font-size: 10px; font-weight: 400; color: rgba(255,255,255,0.45); margin-top: 3px; }
+.modes-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.slider-row { margin-bottom: 14px; }
+.slider-row label { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 8px; }
+.slider-row label span:first-child { color: rgba(255,255,255,0.75); }
+.slider-row label span:last-child { color: #667eea; font-weight: 600; }
+.slider-row input[type=range] { width: 100%; height: 5px; border-radius: 3px; background: rgba(255,255,255,0.1); outline: none; -webkit-appearance: none; }
+.slider-row input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%; background: linear-gradient(135deg,#667eea,#764ba2); cursor: pointer; }
+#fps { font-size: 12px; color: rgba(255,255,255,0.3); font-family: monospace; margin-top: auto; }
+#hide-ui { position: fixed; top: 16px; right: 356px; width: 36px; height: 36px; border-radius: 50%; background: rgba(10,10,20,0.9); border: 1px solid rgba(255,255,255,0.15); color: #fff; font-size: 16px; cursor: pointer; z-index: 10; display: flex; align-items: center; justify-content: center; }
+#hide-ui:hover { background: rgba(102,126,234,0.7); }
+#show-ui { display: none; position: fixed; top: 16px; right: 16px; width: 36px; height: 36px; border-radius: 50%; background: rgba(10,10,20,0.9); border: 1px solid rgba(255,255,255,0.15); color: #fff; font-size: 16px; cursor: pointer; z-index: 10; align-items: center; justify-content: center; }
+#show-ui:hover { background: rgba(102,126,234,0.7); }
+#no-file-msg { font-size: 12px; color: rgba(255,255,255,0.35); text-align: center; padding: 8px; }
+#rec-btn { padding: 10px 16px; background: rgba(220,38,38,0.2); border: 2px solid #dc2626; border-radius: 8px; color: #fff; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+#rec-btn:hover { background: rgba(220,38,38,0.3); }
+#rec-btn.recording { background: #dc2626; animation: pulse 1.5s infinite; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+.color-scheme { width: 30px; height: 30px; border-radius: 6px; cursor: pointer; border: 2px solid rgba(255,255,255,0.2); transition: all 0.2s; }
+.color-scheme:hover { transform: scale(1.1); border-color: rgba(255,255,255,0.5); }
+.color-scheme.active { border-color: #667eea; box-shadow: 0 0 12px rgba(102,126,234,0.6); }
+.color-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+</style>
+</head>
+<body>
+
+<div id="canvas-container">
+  <canvas id="c"></canvas>
+</div>
+
+<button id="hide-ui" title="Hide UI">✕</button>
+<button id="show-ui" title="Show UI">☰</button>
+
+<div id="ui">
+  <div>
+    <h1>Audio Reactive Visuals</h1>
+    <div class="subtitle">Enhanced Edition · WebGL · Three.js</div>
+  </div>
+
+  <div>
+    <div class="section-label">Audio File</div>
+    <button id="upload-btn">📁 Upload Audio (MP3 / WAV / FLAC)</button>
+    <input type="file" id="file-input" accept="audio/*" style="display:none">
+    <div id="file-name">No file loaded</div>
+  </div>
+
+  <div>
+    <div class="section-label">Playback</div>
+    <div class="playback-row">
+      <button id="play-btn" disabled>▶</button>
+      <div id="time-display">0:00 / 0:00</div>
+    </div>
+    <input type="range" id="seek" min="0" max="100" value="0" step="0.1" style="margin-top:12px;width:100%">
+    <div id="no-file-msg">Upload a file to start</div>
+  </div>
+
+  <div>
+    <div class="section-label">Recording</div>
+    <button id="rec-btn">⚫ Start Recording</button>
+    <div id="rec-status" style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:8px;min-height:14px;"></div>
+  </div>
+
+  <div>
+    <div class="section-label">Visual Mode (9 modes)</div>
+    <div class="modes-grid">
+      <button class="mode-btn active" data-mode="particles">✨ Particles<small>15K GPU particles</small></button>
+      <button class="mode-btn" data-mode="liquid">🌊 Liquid<small>Kaleidoscope fluid</small></button>
+      <button class="mode-btn" data-mode="geometry">🔷 Geometry<small>3D morphing</small></button>
+      <button class="mode-btn" data-mode="storm">⚡ Storm<small>Lightning arcs</small></button>
+      <button class="mode-btn" data-mode="waveform">📊 Waveform<small>Audio spectrum</small></button>
+      <button class="mode-btn" data-mode="tunnel">🌀 Tunnel<small>3D infinite tunnel</small></button>
+      <button class="mode-btn" data-mode="fractal">🎆 Fractal<small>Mandelbrot zoom</small></button>
+      <button class="mode-btn" data-mode="galaxy">🌌 Galaxy<small>Spiral stars</small></button>
+      <button class="mode-btn" data-mode="plasma">⚡ Plasma<small>Energy waves</small></button>
+    </div>
+  </div>
+
+  <div>
+    <div class="section-label">Color Scheme</div>
+    <div class="color-grid">
+      <div class="color-scheme active" data-scheme="default" style="background:linear-gradient(135deg,#667eea,#764ba2)" title="Default Purple"></div>
+      <div class="color-scheme" data-scheme="ocean" style="background:linear-gradient(135deg,#2E3192,#1BFFFF)" title="Ocean Blue"></div>
+      <div class="color-scheme" data-scheme="sunset" style="background:linear-gradient(135deg,#FF512F,#F09819)" title="Sunset Orange"></div>
+      <div class="color-scheme" data-scheme="forest" style="background:linear-gradient(135deg,#11998e,#38ef7d)" title="Forest Green"></div>
+      <div class="color-scheme" data-scheme="neon" style="background:linear-gradient(135deg,#f953c6,#b91d73)" title="Neon Pink"></div>
+      <div class="color-scheme" data-scheme="cyber" style="background:linear-gradient(135deg,#00F260,#0575E6)" title="Cyberpunk"></div>
+      <div class="color-scheme" data-scheme="fire" style="background:linear-gradient(135deg,#FF0080,#FF8C00)" title="Fire"></div>
+      <div class="color-scheme" data-scheme="arctic" style="background:linear-gradient(135deg,#4facfe,#00f2fe)" title="Arctic Ice"></div>
+      <div class="color-scheme" data-scheme="royal" style="background:linear-gradient(135deg,#4B0082,#FFD700)" title="Royal Gold"></div>
+      <div class="color-scheme" data-scheme="matrix" style="background:linear-gradient(135deg,#00FF00,#003300)" title="Matrix Green"></div>
+    </div>
+  </div>
+
+  <div>
+    <div class="section-label">Sensitivity</div>
+    <div class="slider-row">
+      <label><span>Bass Intensity</span><span id="bass-val">1.0x</span></label>
+      <input type="range" id="bass-slider" min="0" max="3" step="0.1" value="1">
+    </div>
+    <div class="slider-row">
+      <label><span>Treble Intensity</span><span id="treble-val">1.0x</span></label>
+      <input type="range" id="treble-slider" min="0" max="3" step="0.1" value="1">
+    </div>
+    <div class="slider-row">
+      <label><span>Volume</span><span id="vol-val">100%</span></label>
+      <input type="range" id="vol-slider" min="0" max="1" step="0.01" value="1">
+    </div>
+  </div>
+
+  <div id="fps">60 FPS</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════════════════════
+const state = {
+  mode: 'particles',
+  colorScheme: 'default',
+  bassIntensity: 1,
+  trebleIntensity: 1,
+  playing: false,
+  audioReady: false,
+  recording: false,
+  mediaRecorder: null,
+  recordedChunks: [],
+  // audio
+  audioEl: null,
+  audioCtx: null,
+  analyser: null,
+  gainNode: null,
+  audioDestination: null,
+  // audio data
+  bass: 0, mid: 0, treble: 0, energy: 0, beat: 0, spectral: 0.5,
+  freqData: null,
+  timeData: null,
+  // beat
+  beatHistory: [], beatValue: 0, lastBeat: 0,
+  // smooth prev
+  prev: { bass:0, mid:0, treble:0, energy:0 }
+};
+
+// Color schemes
+const colorSchemes = {
+  default: { h1: 0.7, h2: 0.8, sat: 0.8 },
+  ocean:   { h1: 0.5, h2: 0.55, sat: 0.9 },
+  sunset:  { h1: 0.05, h2: 0.15, sat: 0.95 },
+  forest:  { h1: 0.35, h2: 0.4, sat: 0.7 },
+  neon:    { h1: 0.9, h2: 0.95, sat: 1.0 },
+  cyber:   { h1: 0.45, h2: 0.55, sat: 0.85 },
+  fire:    { h1: 0.0, h2: 0.08, sat: 1.0 },
+  arctic:  { h1: 0.5, h2: 0.6, sat: 0.6 },
+  royal:   { h1: 0.75, h2: 0.15, sat: 0.9 },
+  matrix:  { h1: 0.33, h2: 0.35, sat: 1.0 }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// THREE.JS SETUP
+// ═══════════════════════════════════════════════════════════════════════════
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x000000);
+
+const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 1000);
+camera.position.z = 50;
+
+function resize() {
+  const w = canvas.parentElement.clientWidth;
+  const h = window.innerHeight;
+  renderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize);
+
+// ═══════════════════════════════════════════════════════════════════════════
+// VISUAL MODES (9 total)
+// ═══════════════════════════════════════════════════════════════════════════
+
+const modes = {};
+
+// ─── MODE 1: Particles ─────────────────────────────────────────────────────
+const PCOUNT = 15000;
+function initParticles() {
+  const geo = new THREE.BufferGeometry();
+  const pos = new Float32Array(PCOUNT * 3);
+  const col = new Float32Array(PCOUNT * 3);
+  const vel = new Float32Array(PCOUNT * 3);
+  const sz  = new Float32Array(PCOUNT);
+  for (let i = 0; i < PCOUNT; i++) {
+    const r = Math.random() * 50, t = Math.random()*Math.PI*2, p = Math.random()*Math.PI;
+    pos[i*3]   = r*Math.sin(p)*Math.cos(t);
+    pos[i*3+1] = r*Math.sin(p)*Math.sin(t);
+    pos[i*3+2] = r*Math.cos(p);
+    vel[i*3]   = (Math.random()-.5)*.05;
+    vel[i*3+1] = (Math.random()-.5)*.05;
+    vel[i*3+2] = (Math.random()-.5)*.05;
+    col[i*3]=Math.random(); col[i*3+1]=Math.random(); col[i*3+2]=Math.random();
+    sz[i] = Math.random()*2+.5;
+  }
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('color',    new THREE.BufferAttribute(col, 3));
+  geo.setAttribute('velocity', new THREE.BufferAttribute(vel, 3));
+  geo.setAttribute('size',     new THREE.BufferAttribute(sz,  1));
+  const mat = new THREE.ShaderMaterial({
+    uniforms: { bass:{value:0}, treble:{value:0}, beat:{value:0}, time:{value:0}, hue1:{value:0.7}, hue2:{value:0.8} },
+    vertexShader: `
+      attribute float size; attribute vec3 velocity;
+      uniform float bass, treble, beat, time;
+      varying vec3 vColor;
+      void main() {
+        vColor = color;
+        vec3 p = position + velocity * time * 0.1;
+        p *= 1.0 + bass*0.4 + beat*0.5;
+        vec4 mv = modelViewMatrix * vec4(p,1.0);
+        float shimmer = 1.0 + treble * sin(time*8.0+position.x)*.4;
+        gl_PointSize = size * shimmer * (280.0/-mv.z);
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: `
+      varying vec3 vColor;
+      uniform float treble, hue1, hue2;
+      void main() {
+        vec2 c = gl_PointCoord-.5;
+        if(length(c)>.5) discard;
+        float a = 1.0-smoothstep(0.,.5,length(c));
+        vec3 mixColor = mix(vec3(hue1,.8,.9), vec3(hue2,.9,1.), vColor.r);
+        gl_FragColor = vec4(mixColor*(1.0+treble*.5), a*.85);
+      }`,
+    transparent:true, depthWrite:false, blending:THREE.AdditiveBlending, vertexColors:true
+  });
+  modes.particles = { mesh: new THREE.Points(geo, mat), update: updateParticles };
+  scene.add(modes.particles.mesh);
+}
+
+function updateParticles(delta) {
+  const m = modes.particles.mesh.material;
+  m.uniforms.bass.value   = state.bass;
+  m.uniforms.treble.value = state.treble;
+  m.uniforms.beat.value   = state.beat;
+  m.uniforms.time.value  += delta;
+  const cs = colorSchemes[state.colorScheme];
+  m.uniforms.hue1.value = cs.h1;
+  m.uniforms.hue2.value = cs.h2;
+
+  const pos = modes.particles.mesh.geometry.attributes.position.array;
+  const vel = modes.particles.mesh.geometry.attributes.velocity.array;
+  const col = modes.particles.mesh.geometry.attributes.color.array;
+  const turb = state.mid * 1.5;
+  for (let i = 0; i < PCOUNT; i++) {
+    const i3 = i*3;
+    vel[i3]  += (Math.random()-.5)*turb*.008;
+    vel[i3+1]+= (Math.random()-.5)*turb*.008;
+    vel[i3+2]+= (Math.random()-.5)*turb*.008;
+    pos[i3]  += vel[i3];
+    pos[i3+1]+= vel[i3+1];
+    pos[i3+2]+= vel[i3+2];
+    for(let j=0;j<3;j++) if(Math.abs(pos[i3+j])>58) pos[i3+j]*=-.6;
+  }
+  modes.particles.mesh.geometry.attributes.position.needsUpdate=true;
+  modes.particles.mesh.rotation.y += delta*.08;
+}
+
+// ─── MODE 2: Liquid ────────────────────────────────────────────────────────
+function initLiquid() {
+  const geo = new THREE.PlaneGeometry(2,2);
+  const mat = new THREE.ShaderMaterial({
+    uniforms: {
+      time:{value:0}, resolution:{value:new THREE.Vector2(800,600)},
+      bass:{value:0}, treble:{value:0}, mid:{value:0},
+      beat:{value:0}, energy:{value:0}, spectral:{value:.5},
+      hue1:{value:0.7}, hue2:{value:0.8}, sat:{value:0.8}
+    },
+    vertexShader:`varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position,1.0); }`,
+    fragmentShader:`
+      uniform float time,bass,treble,mid,beat,energy,spectral,hue1,hue2,sat;
+      uniform vec2 resolution;
+      varying vec2 vUv;
+      vec3 mod289(vec3 x){return x-floor(x*(1./289.))*289.;}
+      vec2 mod289(vec2 x){return x-floor(x*(1./289.))*289.;}
+      vec3 permute(vec3 x){return mod289(((x*34.)+1.)*x);}
+      float snoise(vec2 v){
+        const vec4 C=vec4(.211324865,.366025403,-.577350269,.024390244);
+        vec2 i=floor(v+dot(v,C.yy));
+        vec2 x0=v-i+dot(i,C.xx);
+        vec2 i1=x0.x>x0.y?vec2(1,0):vec2(0,1);
+        vec4 x12=x0.xyxy+C.xxzz; x12.xy-=i1;
+        i=mod289(i);
+        vec3 p=permute(permute(i.y+vec3(0,i1.y,1))+i.x+vec3(0,i1.x,1));
+        vec3 m=max(.5-vec3(dot(x0,x0),dot(x12.xy,x12.xy),dot(x12.zw,x12.zw)),0.);
+        m=m*m*m*m;
+        vec3 x2=2.*fract(p*.024390244)-1.;
+        vec3 h=abs(x2)-.5; vec3 ox=floor(x2+.5); vec3 a0=x2-ox;
+        m*=1.79284291-.85373472*(a0*a0+h*h);
+        vec3 g; g.x=a0.x*x0.x+h.x*x0.y;
+        g.yz=a0.yz*x12.xz+h.yz*x12.yw;
+        return 130.*dot(m,g);
+      }
+      float fbm(vec2 p){
+        float v=0.,a=.5,f=1.;
+        for(int i=0;i<5;i++){v+=a*snoise(p*f);f*=2.;a*=.5;}
+        return v;
+      }
+      vec3 hsv(vec3 c){
+        vec4 K=vec4(1.,2./3.,1./3.,3.);
+        vec3 p=abs(fract(c.xxx+K.xyz)*6.-K.www);
+        return c.z*mix(K.xxx,clamp(p-K.xxx,0.,1.),c.y);
+      }
+      void main(){
+        vec2 uv=(vUv-.5)*2.; uv.x*=resolution.x/resolution.y;
+        float amp=.3+bass*1.4;
+        float t=time*.25;
+        vec2 d=vec2(fbm(uv*2.+t*.5),fbm(uv*2.-t*.3))*amp;
+        vec2 du=uv+d;
+        float n1=fbm(du*3.+time*.2);
+        float n2=fbm(du*5.-time*.3);
+        float pat=pow(abs(n1*n2),2.+treble*4.)*fbm(du*7.+time*.15);
+        float hue=mix(hue1,hue2,spectral+pat*.3);
+        vec3 col=hsv(vec3(hue,sat,.5+pat*.5+energy*.3));
+        col+=vec3(1.)*beat*.4;
+        gl_FragColor=vec4(col,1.);
+      }`
+  });
+  modes.liquid = { mesh: new THREE.Mesh(geo, mat), update: updateLiquid };
+  modes.liquid.mesh.visible = false;
+  scene.add(modes.liquid.mesh);
+}
+
+function updateLiquid(delta) {
+  const u = modes.liquid.mesh.material.uniforms;
+  u.time.value   += delta;
+  u.bass.value    = state.bass;
+  u.treble.value  = state.treble;
+  u.mid.value     = state.mid;
+  u.beat.value    = state.beat;
+  u.energy.value  = state.energy;
+  u.spectral.value= state.spectral;
+  const cs = colorSchemes[state.colorScheme];
+  u.hue1.value = cs.h1; u.hue2.value = cs.h2; u.sat.value = cs.sat;
+}
+
+// ─── MODE 3: Geometry ──────────────────────────────────────────────────────
+function initGeometry() {
+  const geo = new THREE.IcosahedronGeometry(14, 6);
+  const mat = new THREE.ShaderMaterial({
+    uniforms: { time:{value:0}, bass:{value:0}, treble:{value:0}, mid:{value:0}, energy:{value:0}, spectral:{value:.5}, beat:{value:0}, hue1:{value:0.7}, hue2:{value:0.8} },
+    vertexShader:`
+      uniform float time,bass,treble,mid;
+      varying vec3 vNorm; varying vec3 vPos; varying float vDisp;
+      float hash(vec3 p){return fract(sin(dot(p,vec3(127.1,311.7,74.7)))*43758.5);}
+      float noise(vec3 p){vec3 i=floor(p);vec3 f=fract(p);f=f*f*(3.-2.*f);return mix(mix(mix(hash(i),hash(i+vec3(1,0,0)),f.x),mix(hash(i+vec3(0,1,0)),hash(i+vec3(1,1,0)),f.x),f.y),mix(mix(hash(i+vec3(0,0,1)),hash(i+vec3(1,0,1)),f.x),mix(hash(i+vec3(0,1,1)),hash(i+vec3(1,1,1)),f.x),f.y),f.z);}
+      void main(){
+        vNorm=normalize(normalMatrix*normal);vPos=position;
+        float expand=1.+bass*.5;
+        float d=noise(position*.4+time*.4)*treble*3.+noise(position*.8+time*.25)*mid*2.;
+        vDisp=d;
+        vec3 np=position*expand+normal*d;
+        gl_Position=projectionMatrix*modelViewMatrix*vec4(np,1.);
+      }`,
+    fragmentShader:`
+      uniform float spectral,energy,beat,time,hue1,hue2;
+      varying vec3 vNorm;varying vec3 vPos;varying float vDisp;
+      vec3 hsv(vec3 c){vec4 K=vec4(1.,2./3.,1./3.,3.);vec3 p=abs(fract(c.xxx+K.xyz)*6.-K.www);return c.z*mix(K.xxx,clamp(p-K.xxx,0.,1.),c.y);}
+      void main(){
+        vec3 vd=normalize(cameraPosition-vPos);
+        float fr=pow(1.-abs(dot(vd,vNorm)),2.);
+        float hue=mix(hue1,hue2,spectral+vDisp*.08);
+        vec3 col=hsv(vec3(hue,.85,.5+energy*.5+fr*.4));
+        col+=fr*vec3(.4,.7,1.)*energy;
+        col+=beat*.25;
+        gl_FragColor=vec4(col,1.);
+      }`,
+    side: THREE.DoubleSide
+  });
+  modes.geometry = { mesh: new THREE.Mesh(geo, mat), update: updateGeometry };
+  modes.geometry.mesh.visible = false;
+  scene.add(modes.geometry.mesh);
+}
+
+function updateGeometry(delta) {
+  const u = modes.geometry.mesh.material.uniforms;
+  u.time.value   += delta;
+  u.bass.value    = state.bass;
+  u.treble.value  = state.treble;
+  u.mid.value     = state.mid;
+  u.energy.value  = state.energy;
+  u.spectral.value= state.spectral;
+  u.beat.value    = state.beat;
+  const cs = colorSchemes[state.colorScheme];
+  u.hue1.value = cs.h1; u.hue2.value = cs.h2;
+  modes.geometry.mesh.rotation.y += delta*(.18+state.beat*.4);
+  modes.geometry.mesh.rotation.x += delta*(.09+state.energy*.15);
+}
+
+// ─── MODE 4: Storm ─────────────────────────────────────────────────────────
+const bolts = [];
+function initStorm() {
+  modes.storm = { group: new THREE.Group(), update: updateStorm };
+  scene.add(modes.storm.group);
+  modes.storm.group.visible = false;
+  for(let i=0;i<30;i++) spawnBolt();
+}
+
+function spawnBolt() {
+  const segs = 18;
+  const pts = [];
+  const sx=(Math.random()-.5)*55,sy=(Math.random()-.5)*55,sz=(Math.random()-.5)*55;
+  const ex=(Math.random()-.5)*55,ey=(Math.random()-.5)*55,ez=(Math.random()-.5)*55;
+  for(let i=0;i<segs;i++){
+    const t=i/(segs-1);
+    pts.push(new THREE.Vector3(
+      sx+(ex-sx)*t+(i>0&&i<segs-1?(Math.random()-.5)*5:0),
+      sy+(ey-sy)*t+(i>0&&i<segs-1?(Math.random()-.5)*5:0),
+      sz+(ez-sz)*t+(i>0&&i<segs-1?(Math.random()-.5)*5:0)
+    ));
+  }
+  const geo = new THREE.BufferGeometry().setFromPoints(pts);
+  const mat = new THREE.ShaderMaterial({
+    uniforms:{time:{value:0},treble:{value:0},beat:{value:0},op:{value:Math.random()},hue:{value:0.7}},
+    vertexShader:`void main(){gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
+    fragmentShader:`
+      uniform float time,treble,beat,op,hue;
+      vec3 hsv(vec3 c){vec4 K=vec4(1.,2./3.,1./3.,3.);vec3 p=abs(fract(c.xxx+K.xyz)*6.-K.www);return c.z*mix(K.xxx,clamp(p-K.xxx,0.,1.),c.y);}
+      void main(){
+        float p=sin(time*10.)*0.5+0.5;
+        float a=op*p*(.3+treble*.7+beat);
+        vec3 col=hsv(vec3(hue,.9,1.));
+        gl_FragColor=vec4(col,a);
+      }`,
+    transparent:true,blending:THREE.AdditiveBlending,depthWrite:false
+  });
+  const line = new THREE.Line(geo, mat);
+  line.userData.life = Math.random()*2+1;
+  line.userData.age  = 0;
+  bolts.push(line);
+  modes.storm.group.add(line);
+}
+
+function updateStorm(delta) {
+  const cs = colorSchemes[state.colorScheme];
+  for(let i=bolts.length-1;i>=0;i--){
+    const b=bolts[i];
+    b.userData.age+=delta;
+    b.material.uniforms.time.value+=delta;
+    b.material.uniforms.treble.value=state.treble;
+    b.material.uniforms.beat.value=state.beat;
+    b.material.uniforms.hue.value=cs.h1;
+    b.rotation.x+=delta*.3; b.rotation.y+=delta*.2;
+    if(b.userData.age>b.userData.life){
+      modes.storm.group.remove(b);
+      b.geometry.dispose(); b.material.dispose();
+      bolts.splice(i,1);
+    }
+  }
+  if((state.beat>.5||state.treble>.6)&&bolts.length<60) spawnBolt();
+}
+
+// ─── MODE 5: Waveform ──────────────────────────────────────────────────────
+function initWaveform() {
+  const geo = new THREE.BufferGeometry();
+  const bars = 128;
+  const pos = new Float32Array(bars * 6 * 3);
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const mat = new THREE.ShaderMaterial({
+    uniforms: { hue1:{value:0.7}, hue2:{value:0.8}, sat:{value:0.8} },
+    vertexShader: `
+      varying float vY;
+      void main() {
+        vY = position.y;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }`,
+    fragmentShader: `
+      uniform float hue1, hue2, sat;
+      varying float vY;
+      vec3 hsv(vec3 c){vec4 K=vec4(1.,2./3.,1./3.,3.);vec3 p=abs(fract(c.xxx+K.xyz)*6.-K.www);return c.z*mix(K.xxx,clamp(p-K.xxx,0.,1.),c.y);}
+      void main() {
+        float h = mix(hue1, hue2, vY / 50.0);
+        vec3 col = hsv(vec3(h, sat, 0.9));
+        gl_FragColor = vec4(col, 0.9);
+      }`,
+    transparent: true,
+    side: THREE.DoubleSide
+  });
+  modes.waveform = { mesh: new THREE.Mesh(geo, mat), update: updateWaveform };
+  modes.waveform.mesh.visible = false;
+  scene.add(modes.waveform.mesh);
+}
+
+function updateWaveform(delta) {
+  if (!state.freqData) return;
+  const pos = modes.waveform.mesh.geometry.attributes.position.array;
+  const bars = 128;
+  const step = Math.floor(state.freqData.length / bars);
+  for (let i = 0; i < bars; i++) {
+    const h = (state.freqData[i * step] / 255) * 40 * (1 + state.bassIntensity);
+    const x = (i - bars / 2) * 1.2;
+    const w = 1;
+    pos[i*18]   = x-w/2; pos[i*18+1] = 0;    pos[i*18+2] = 0;
+    pos[i*18+3] = x+w/2; pos[i*18+4] = 0;    pos[i*18+5] = 0;
+    pos[i*18+6] = x+w/2; pos[i*18+7] = h;    pos[i*18+8] = 0;
+    pos[i*18+9] = x-w/2; pos[i*18+10]= 0;    pos[i*18+11]= 0;
+    pos[i*18+12]= x+w/2; pos[i*18+13]= h;    pos[i*18+14]= 0;
+    pos[i*18+15]= x-w/2; pos[i*18+16]= h;    pos[i*18+17]= 0;
+  }
+  modes.waveform.mesh.geometry.attributes.position.needsUpdate = true;
+  const cs = colorSchemes[state.colorScheme];
+  modes.waveform.mesh.material.uniforms.hue1.value = cs.h1;
+  modes.waveform.mesh.material.uniforms.hue2.value = cs.h2;
+  modes.waveform.mesh.material.uniforms.sat.value = cs.sat;
+}
+
+// ─── MODE 6: Tunnel ────────────────────────────────────────────────────────
+function initTunnel() {
+  const geo = new THREE.PlaneGeometry(2, 2);
+  const mat = new THREE.ShaderMaterial({
+    uniforms: {
+      time: {value:0}, bass: {value:0}, treble: {value:0}, beat: {value:0},
+      hue1: {value:0.7}, hue2: {value:0.8}, sat: {value:0.8}
+    },
+    vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position,1.0); }`,
+    fragmentShader: `
+      uniform float time, bass, treble, beat, hue1, hue2, sat;
+      varying vec2 vUv;
+      vec3 hsv(vec3 c){vec4 K=vec4(1.,2./3.,1./3.,3.);vec3 p=abs(fract(c.xxx+K.xyz)*6.-K.www);return c.z*mix(K.xxx,clamp(p-K.xxx,0.,1.),c.y);}
+      void main() {
+        vec2 uv = (vUv - 0.5) * 2.0;
+        float angle = atan(uv.y, uv.x);
+        float radius = length(uv);
+        float tunnel = mod(1.0/radius + time * (0.5 + bass), 0.5);
+        float rings = sin(angle * 8.0 + time * 2.0) * 0.5 + 0.5;
+        float pattern = tunnel * rings * (1.0 + treble);
+        float h = mix(hue1, hue2, pattern);
+        vec3 col = hsv(vec3(h, sat, pattern + beat * 0.5));
+        gl_FragColor = vec4(col, 1.0);
+      }`
+  });
+  modes.tunnel = { mesh: new THREE.Mesh(geo, mat), update: updateTunnel };
+  modes.tunnel.mesh.visible = false;
+  scene.add(modes.tunnel.mesh);
+}
+
+function updateTunnel(delta) {
+  const u = modes.tunnel.mesh.material.uniforms;
+  u.time.value += delta;
+  u.bass.value = state.bass;
+  u.treble.value = state.treble;
+  u.beat.value = state.beat;
+  const cs = colorSchemes[state.colorScheme];
+  u.hue1.value = cs.h1; u.hue2.value = cs.h2; u.sat.value = cs.sat;
+}
+
+// ─── MODE 7: Fractal ───────────────────────────────────────────────────────
+function initFractal() {
+  const geo = new THREE.PlaneGeometry(2, 2);
+  const mat = new THREE.ShaderMaterial({
+    uniforms: {
+      time: {value:0}, bass: {value:0}, treble: {value:0}, energy: {value:0},
+      hue1: {value:0.7}, hue2: {value:0.8}, sat: {value:0.8}
+    },
+    vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position,1.0); }`,
+    fragmentShader: `
+      uniform float time, bass, treble, energy, hue1, hue2, sat;
+      varying vec2 vUv;
+      vec3 hsv(vec3 c){vec4 K=vec4(1.,2./3.,1./3.,3.);vec3 p=abs(fract(c.xxx+K.xyz)*6.-K.www);return c.z*mix(K.xxx,clamp(p-K.xxx,0.,1.),c.y);}
+      void main() {
+        vec2 uv = (vUv - 0.5) * 3.0;
+        float zoom = 1.0 + bass * 2.0;
+        vec2 c = uv / zoom;
+        vec2 z = c;
+        float iter = 0.0;
+        for (int i = 0; i < 50; i++) {
+          if (length(z) > 4.0) break;
+          z = vec2(z.x*z.x - z.y*z.y, 2.0*z.x*z.y) + c + vec2(sin(time*0.1), cos(time*0.15))*0.3;
+          iter += 1.0;
+        }
+        float t = iter / 50.0 * (1.0 + treble);
+        float h = mix(hue1, hue2, t);
+        vec3 col = hsv(vec3(h, sat, t + energy * 0.3));
+        gl_FragColor = vec4(col, 1.0);
+      }`
+  });
+  modes.fractal = { mesh: new THREE.Mesh(geo, mat), update: updateFractal };
+  modes.fractal.mesh.visible = false;
+  scene.add(modes.fractal.mesh);
+}
+
+function updateFractal(delta) {
+  const u = modes.fractal.mesh.material.uniforms;
+  u.time.value += delta;
+  u.bass.value = state.bass;
+  u.treble.value = state.treble;
+  u.energy.value = state.energy;
+  const cs = colorSchemes[state.colorScheme];
+  u.hue1.value = cs.h1; u.hue2.value = cs.h2; u.sat.value = cs.sat;
+}
+
+// ─── MODE 8: Galaxy ────────────────────────────────────────────────────────
+function initGalaxy() {
+  const count = 8000;
+  const geo = new THREE.BufferGeometry();
+  const pos = new Float32Array(count * 3);
+  const col = new Float32Array(count * 3);
+  const sz = new Float32Array(count);
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const radius = Math.random() * 40 + 5;
+    pos[i*3] = Math.cos(angle) * radius;
+    pos[i*3+1] = (Math.random() - 0.5) * 5;
+    pos[i*3+2] = Math.sin(angle) * radius;
+    col[i*3] = Math.random();
+    col[i*3+1] = Math.random();
+    col[i*3+2] = Math.random();
+    sz[i] = Math.random() * 2 + 0.5;
+  }
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  geo.setAttribute('size', new THREE.BufferAttribute(sz, 1));
+  const mat = new THREE.ShaderMaterial({
+    uniforms: { time:{value:0}, bass:{value:0}, hue1:{value:0.7}, hue2:{value:0.8} },
+    vertexShader: `
+      attribute float size;
+      uniform float time, bass;
+      varying vec3 vColor;
+      void main() {
+        vColor = color;
+        vec3 p = position;
+        float angle = atan(p.z, p.x);
+        float newAngle = angle + time * 0.2 * (1.0 + bass);
+        float r = length(vec2(p.x, p.z));
+        p.x = cos(newAngle) * r;
+        p.z = sin(newAngle) * r;
+        vec4 mv = modelViewMatrix * vec4(p, 1.0);
+        gl_PointSize = size * (250.0 / -mv.z);
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: `
+      uniform float hue1, hue2;
+      varying vec3 vColor;
+      vec3 hsv(vec3 c){vec4 K=vec4(1.,2./3.,1./3.,3.);vec3 p=abs(fract(c.xxx+K.xyz)*6.-K.www);return c.z*mix(K.xxx,clamp(p-K.xxx,0.,1.),c.y);}
+      void main() {
+        vec2 c = gl_PointCoord - 0.5;
+        if (length(c) > 0.5) discard;
+        float h = mix(hue1, hue2, vColor.r);
+        vec3 col = hsv(vec3(h, 0.8, 1.0));
+        gl_FragColor = vec4(col, 0.9);
+      }`,
+    transparent: true, vertexColors: true, depthWrite: false, blending: THREE.AdditiveBlending
+  });
+  modes.galaxy = { mesh: new THREE.Points(geo, mat), update: updateGalaxy };
+  modes.galaxy.mesh.visible = false;
+  scene.add(modes.galaxy.mesh);
+}
+
+function updateGalaxy(delta) {
+  const u = modes.galaxy.mesh.material.uniforms;
+  u.time.value += delta;
+  u.bass.value = state.bass;
+  const cs = colorSchemes[state.colorScheme];
+  u.hue1.value = cs.h1; u.hue2.value = cs.h2;
+}
+
+// ─── MODE 9: Plasma ────────────────────────────────────────────────────────
+function initPlasma() {
+  const geo = new THREE.PlaneGeometry(2, 2);
+  const mat = new THREE.ShaderMaterial({
+    uniforms: {
+      time: {value:0}, bass: {value:0}, treble: {value:0}, mid: {value:0},
+      hue1: {value:0.7}, hue2: {value:0.8}, sat: {value:0.8}
+    },
+    vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position,1.0); }`,
+    fragmentShader: `
+      uniform float time, bass, treble, mid, hue1, hue2, sat;
+      varying vec2 vUv;
+      vec3 hsv(vec3 c){vec4 K=vec4(1.,2./3.,1./3.,3.);vec3 p=abs(fract(c.xxx+K.xyz)*6.-K.www);return c.z*mix(K.xxx,clamp(p-K.xxx,0.,1.),c.y);}
+      void main() {
+        vec2 uv = (vUv - 0.5) * 4.0;
+        float v1 = sin(uv.x * 10.0 + time * (2.0 + bass));
+        float v2 = sin(10.0 * (uv.x * sin(time / 2.0) + uv.y * cos(time / 3.0)) + time);
+        float v3 = sin(sqrt(100.0 * (uv.x * uv.x + uv.y * uv.y) + 1.0) + time);
+        float v = (v1 + v2 + v3) / 3.0 * (1.0 + treble * 0.5);
+        float h = mix(hue1, hue2, (v + 1.0) / 2.0);
+        vec3 col = hsv(vec3(h, sat, (v + 1.0) / 2.0 + mid * 0.3));
+        gl_FragColor = vec4(col, 1.0);
+      }`
+  });
+  modes.plasma = { mesh: new THREE.Mesh(geo, mat), update: updatePlasma };
+  modes.plasma.mesh.visible = false;
+  scene.add(modes.plasma.mesh);
+}
+
+function updatePlasma(delta) {
+  const u = modes.plasma.mesh.material.uniforms;
+  u.time.value += delta;
+  u.bass.value = state.bass;
+  u.treble.value = state.treble;
+  u.mid.value = state.mid;
+  const cs = colorSchemes[state.colorScheme];
+  u.hue1.value = cs.h1; u.hue2.value = cs.h2; u.sat.value = cs.sat;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MODE SWITCHING
+// ═══════════════════════════════════════════════════════════════════════════
+function setMode(mode) {
+  state.mode = mode;
+  Object.keys(modes).forEach(k => {
+    if (modes[k].mesh) modes[k].mesh.visible = false;
+    if (modes[k].group) modes[k].group.visible = false;
+  });
+  if (modes[mode]) {
+    if (modes[mode].mesh) modes[mode].mesh.visible = true;
+    if (modes[mode].group) modes[mode].group.visible = true;
+  }
+  if (mode === 'liquid' || mode === 'tunnel' || mode === 'fractal' || mode === 'plasma') {
+    camera.position.set(0, 0, 1);
+  } else if (mode === 'waveform') {
+    camera.position.set(0, 0, 80);
+  } else {
+    camera.position.set(0, 0, 50);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// AUDIO ANALYSIS
+// ═══════════════════════════════════════════════════════════════════════════
+function smooth(cur, prev) { return prev*.75 + cur*.25; }
+
+function freqAvg(startHz, endHz) {
+  if (!state.analyser || !state.freqData) return 0;
+  const nyq = state.audioCtx.sampleRate / 2;
+  const n   = state.analyser.frequencyBinCount;
+  const s   = Math.floor(startHz/nyq*n);
+  const e   = Math.floor(endHz/nyq*n);
+  let sum=0, cnt=0;
+  for(let i=s;i<=e;i++){ sum+=state.freqData[i]; cnt++; }
+  return cnt>0 ? sum/cnt/255 : 0;
+}
+
+function updateAudio() {
+  if (!state.analyser) return;
+  state.analyser.getByteFrequencyData(state.freqData);
+  state.analyser.getByteTimeDomainData(state.timeData);
+
+  const rawBass   = freqAvg(20, 150)   * state.bassIntensity;
+  const rawMid    = freqAvg(400, 2500);
+  const rawTreble = freqAvg(6000, 20000) * state.trebleIntensity;
+
+  let rms=0;
+  for(let i=0;i<state.timeData.length;i++){ const n=(state.timeData[i]-128)/128; rms+=n*n; }
+  rms=Math.sqrt(rms/state.timeData.length);
+
+  let ws=0,ss=0;
+  for(let i=0;i<state.freqData.length;i++){ const m=state.freqData[i]/255; ws+=m*i; ss+=m; }
+  state.spectral = ss>0 ? (ws/ss)/state.freqData.length : .5;
+
+  state.bass   = smooth(rawBass,   state.prev.bass);
+  state.mid    = smooth(rawMid,    state.prev.mid);
+  state.treble = smooth(rawTreble, state.prev.treble);
+  state.energy = smooth(rms,       state.prev.energy);
+  state.prev.bass=state.bass; state.prev.mid=state.mid;
+  state.prev.treble=state.treble; state.prev.energy=state.energy;
+
+  state.beatHistory.push(state.energy);
+  if(state.beatHistory.length>43) state.beatHistory.shift();
+  const avg=state.beatHistory.reduce((a,b)=>a+b,0)/state.beatHistory.length;
+  if(state.energy>avg*1.3 && Date.now()-state.lastBeat>100){
+    state.beatValue=1; state.lastBeat=Date.now();
+  }
+  state.beatValue*=.96;
+  state.beat=state.beatValue;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RENDER LOOP
+// ═══════════════════════════════════════════════════════════════════════════
+const clock = new THREE.Clock();
+let lastFpsTime=0, frameCount=0;
+
+function animate() {
+  requestAnimationFrame(animate);
+  const delta = clock.getDelta();
+  const elapsed = clock.elapsedTime;
+
+  updateAudio();
+
+  if (modes[state.mode] && modes[state.mode].update) {
+    modes[state.mode].update(delta);
+  }
+
+  if (!['liquid','tunnel','fractal','plasma','waveform'].includes(state.mode)) {
+    camera.position.z = 50 + state.bass*8 + state.beat*4;
+    camera.rotation.z = Math.sin(elapsed*.1)*.015*state.energy;
+  }
+
+  renderer.render(scene, camera);
+
+  frameCount++;
+  if(elapsed-lastFpsTime>=1){ document.getElementById('fps').textContent=frameCount+' FPS'; frameCount=0; lastFpsTime=elapsed; }
+
+  if(state.audioEl && !state.audioEl.paused && state.audioEl.duration) {
+    const pct = state.audioEl.currentTime / state.audioEl.duration * 100;
+    document.getElementById('seek').value = pct;
+    document.getElementById('time-display').textContent = fmt(state.audioEl.currentTime)+' / '+fmt(state.audioEl.duration);
+  }
+}
+
+function fmt(s){ if(!s||isNaN(s))return'0:00'; return Math.floor(s/60)+':'+(Math.floor(s%60)+'').padStart(2,'0'); }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RECORDING
+// ═══════════════════════════════════════════════════════════════════════════
+document.getElementById('rec-btn').onclick = async () => {
+  if (state.recording) {
+    // Stop recording
+    state.mediaRecorder.stop();
+    state.recording = false;
+    document.getElementById('rec-btn').textContent = '⚫ Start Recording';
+    document.getElementById('rec-btn').classList.remove('recording');
+    document.getElementById('rec-status').textContent = 'Processing...';
+  } else {
+    // Start recording
+    if (!state.audioEl || !state.playing) {
+      alert('Please play audio first before recording');
+      return;
+    }
+
+    try {
+      const canvasStream = canvas.captureStream(30);
+      
+      // Mix canvas video + audio
+      const audioDestination = state.audioCtx.createMediaStreamDestination();
+      state.gainNode.connect(audioDestination);
+      
+      const audioTracks = audioDestination.stream.getAudioTracks();
+      audioTracks.forEach(track => canvasStream.addTrack(track));
+
+      state.mediaRecorder = new MediaRecorder(canvasStream, {
+        mimeType: 'video/webm;codecs=vp9,opus',
+        videoBitsPerSecond: 8000000
+      });
+
+      state.recordedChunks = [];
+
+      state.mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) state.recordedChunks.push(e.data);
+      };
+
+      state.mediaRecorder.onstop = () => {
+        const blob = new Blob(state.recordedChunks, { type: 'video/webm' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'audio-visual-' + Date.now() + '.webm';
+        a.click();
+        document.getElementById('rec-status').textContent = 'Download started!';
+        setTimeout(() => { document.getElementById('rec-status').textContent = ''; }, 3000);
+      };
+
+      state.mediaRecorder.start();
+      state.recording = true;
+      document.getElementById('rec-btn').textContent = '⏹ Stop Recording';
+      document.getElementById('rec-btn').classList.add('recording');
+      document.getElementById('rec-status').textContent = 'Recording...';
+    } catch (err) {
+      alert('Recording failed: ' + err.message);
+      console.error(err);
+    }
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// UI WIRING
+// ═══════════════════════════════════════════════════════════════════════════
+document.getElementById('upload-btn').onclick = () => document.getElementById('file-input').click();
+
+document.getElementById('file-input').onchange = async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  if (state.audioEl) { state.audioEl.pause(); state.audioEl.src=''; }
+  if (state.audioCtx) { state.audioCtx.close(); state.audioCtx=null; state.analyser=null; }
+  state.audioReady = false;
+
+  state.audioEl = new Audio();
+  state.audioEl.src = URL.createObjectURL(file);
+
+  await new Promise(res => state.audioEl.addEventListener('loadedmetadata', res, {once:true}));
+
+  document.getElementById('file-name').textContent = file.name;
+  document.getElementById('time-display').textContent = '0:00 / '+fmt(state.audioEl.duration);
+  document.getElementById('play-btn').disabled = false;
+  document.getElementById('no-file-msg').style.display = 'none';
+  state.audioReady = true;
+  state.playing = false;
+  document.getElementById('play-btn').textContent = '▶';
+  document.getElementById('play-btn').classList.remove('playing');
+};
+
+document.getElementById('play-btn').onclick = async () => {
+  if (!state.audioReady || !state.audioEl) return;
+
+  if (state.playing) {
+    state.audioEl.pause();
+    state.playing = false;
+    document.getElementById('play-btn').textContent = '▶';
+    document.getElementById('play-btn').classList.remove('playing');
+    return;
+  }
+
+  if (!state.audioCtx) {
+    state.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    state.analyser  = state.audioCtx.createAnalyser();
+    state.analyser.fftSize = 2048;
+    state.analyser.smoothingTimeConstant = 0.7;
+    state.analyser.minDecibels = -90;
+    state.analyser.maxDecibels = -10;
+
+    state.gainNode = state.audioCtx.createGain();
+
+    const src = state.audioCtx.createMediaElementSource(state.audioEl);
+    src.connect(state.analyser);
+    state.analyser.connect(state.gainNode);
+    state.gainNode.connect(state.audioCtx.destination);
+
+    state.freqData = new Uint8Array(state.analyser.frequencyBinCount);
+    state.timeData = new Uint8Array(state.analyser.frequencyBinCount);
+    state.gainNode.gain.value = document.getElementById('vol-slider').value;
+  }
+
+  if (state.audioCtx.state === 'suspended') await state.audioCtx.resume();
+
+  await state.audioEl.play();
+  state.playing = true;
+  document.getElementById('play-btn').textContent = '⏸';
+  document.getElementById('play-btn').classList.add('playing');
+};
+
+document.getElementById('seek').oninput = (e) => {
+  if (state.audioEl && state.audioEl.duration) {
+    state.audioEl.currentTime = state.audioEl.duration * e.target.value / 100;
+  }
+};
+
+document.querySelectorAll('.mode-btn').forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    setMode(btn.dataset.mode);
+  };
+});
+
+document.querySelectorAll('.color-scheme').forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll('.color-scheme').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    state.colorScheme = btn.dataset.scheme;
+  };
+});
+
+document.getElementById('bass-slider').oninput = e => {
+  state.bassIntensity = +e.target.value;
+  document.getElementById('bass-val').textContent = (+e.target.value).toFixed(1)+'x';
+};
+document.getElementById('treble-slider').oninput = e => {
+  state.trebleIntensity = +e.target.value;
+  document.getElementById('treble-val').textContent = (+e.target.value).toFixed(1)+'x';
+};
+document.getElementById('vol-slider').oninput = e => {
+  document.getElementById('vol-val').textContent = Math.round(e.target.value*100)+'%';
+  if (state.gainNode) state.gainNode.gain.value = +e.target.value;
+};
+
+document.getElementById('hide-ui').onclick = () => {
+  document.getElementById('ui').style.display='none';
+  document.getElementById('hide-ui').style.display='none';
+  document.getElementById('show-ui').style.display='flex';
+  resize();
+};
+document.getElementById('show-ui').onclick = () => {
+  document.getElementById('ui').style.display='flex';
+  document.getElementById('hide-ui').style.display='flex';
+  document.getElementById('show-ui').style.display='none';
+  resize();
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════════════════════
+initParticles();
+initLiquid();
+initGeometry();
+initStorm();
+initWaveform();
+initTunnel();
+initFractal();
+initGalaxy();
+initPlasma();
+setMode('particles');
+resize();
+animate();
+</script>
+</body>
+</html>
