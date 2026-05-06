@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Anahat Final - 1080p Crisp</title>
+<style>
+body { margin:0; background:black; overflow:hidden; }
+#ui {
+  position:fixed;
+  top:20px;
+  left:20px;
+  z-index:10;
+}
+button,input {
+  padding:10px;
+  margin-right:10px;
+  background:rgba(255,255,255,0.1);
+  color:white;
+  border:none;
+  border-radius:8px;
+}
+/* This forces the canvas to fit your screen visually, even though it's rendering at 1080p under the hood */
+canvas {
+  width: 100vw;
+  height: 100vh;
+  object-fit: contain; 
+}
+</style>
+</head>
+<body>
+
+<div id="ui">
+<input type="file" id="fileInput" accept="audio/*">
+<button id="playBtn">Play</button>
+<button id="recBtn">Record</button>
+</div>
+
+<canvas id="c"></canvas>
+
+<script>
+const canvas = document.getElementById("c");
+const gl = canvas.getContext("webgl");
+
+// HARDCODED 1080p RESOLUTION
+canvas.width = 1920;
+canvas.height = 1080;
+
+// ===== SHADERS =====
+const vs = `
+attribute vec2 p;
+void main(){ gl_Position=vec4(p,0.,1.); }
+`;
+
+const fs = `
+precision mediump float;
+
+uniform float t, bass, mids, highs, mode, drop, speed, zoom;
+uniform vec2 res;
+
+vec3 palette(float x){
+  return vec3(
+    0.05 + 0.3*sin(x*1.2),
+    0.02 + 0.2*sin(x*1.1),
+    0.1 + 0.4*sin(x*1.5)
+  );
+}
+
+// MODES
+
+float tunnel(vec2 uv){
+  float r=length(uv)*zoom;
+  return sin(8.0/r - t*2.0*speed + bass*5.0);
+}
+
+float geometry(vec2 uv){
+  uv*=zoom;
+  float a=atan(uv.y,uv.x);
+  float r=length(uv);
+  return sin(a*6.0 + t*speed + r*10.0) *
+         sin(r*20.0 - t*speed);
+}
+
+float waves(vec2 uv){
+  return sin(uv.x*10.0 + t*speed + mids*5.0) *
+         sin(uv.y*10.0 - t*speed);
+}
+
+float spiral(vec2 uv){
+  float a=atan(uv.y,uv.x);
+  float r=length(uv);
+  return sin(a*5.0 + r*10.0 - t*speed*2.0);
+}
+
+float particles(vec2 uv){
+  uv *= zoom * 2.0;
+  vec2 gv = fract(uv) - 0.5;
+  vec2 id = floor(uv);
+  float d = length(gv);
+  float sparkle = sin(dot(id, vec2(12.3,45.6)) + t*speed*2.0);
+  return smoothstep(0.2, 0.0, d) * sparkle;
+}
+
+float bloom(vec2 uv){
+  float r = length(uv*zoom);
+  float a = atan(uv.y, uv.x);
+  float petals = sin(a*8.0 + t*speed);
+  float rings = sin(r*15.0 - t*speed*2.0);
+  return petals * rings;
+}
+
+void main(){
+  vec2 uv=(gl_FragCoord.xy-0.5*res)/res.y;
+
+  float d;
+
+  if(mode<1.) d=tunnel(uv);
+  else if(mode<2.) d=geometry(uv);
+  else if(mode<3.) d=waves(uv);
+  else if(mode<4.) d=spiral(uv);
+  else if(mode<5.) d=particles(uv);
+  else d=bloom(uv);
+
+  float glow=exp(-length(uv)*2.0);
+
+  float intensity=d*glow;
+
+  vec3 col=palette(intensity + t*0.2);
+
+  col += bass*0.2;
+  col += drop*0.5;
+
+  col *= 0.8;
+
+  gl_FragColor=vec4(col,1.0);
+}
+`;
+
+// compile
+function shader(type,src){
+  let s=gl.createShader(type);
+  gl.shaderSource(s,src);
+  gl.compileShader(s);
+  return s;
+}
+
+let prog=gl.createProgram();
+gl.attachShader(prog,shader(gl.VERTEX_SHADER,vs));
+gl.attachShader(prog,shader(gl.FRAGMENT_SHADER,fs));
+gl.linkProgram(prog);
+gl.useProgram(prog);
+
+// quad
+let buf=gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER,buf);
+gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([
+-1,-1,1,-1,-1,1,
+-1,1,1,-1,1,1]),gl.STATIC_DRAW);
+
+let loc=gl.getAttribLocation(prog,"p");
+gl.enableVertexAttribArray(loc);
+gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
+
+// uniforms
+let tLoc=gl.getUniformLocation(prog,"t");
+let bLoc=gl.getUniformLocation(prog,"bass");
+let mLoc=gl.getUniformLocation(prog,"mids");
+let hLoc=gl.getUniformLocation(prog,"highs");
+let modeLoc=gl.getUniformLocation(prog,"mode");
+let dropLoc=gl.getUniformLocation(prog,"drop");
+let speedLoc=gl.getUniformLocation(prog,"speed");
+let zoomLoc=gl.getUniformLocation(prog,"zoom");
+let resLoc=gl.getUniformLocation(prog,"res");
+
+// AUDIO
+let ctx=new (window.AudioContext||window.webkitAudioContext)();
+let analyser=ctx.createAnalyser();
+analyser.fftSize=256;
+let data=new Uint8Array(analyser.frequencyBinCount);
+
+// Create a destination for the recording
+let dest = ctx.createMediaStreamDestination();
+
+let buffer, source;
+let isPlaying=false;
+let startTime=0;
+let pauseTime=0;
+
+fileInput.onchange=async e=>{
+  let arr=await e.target.files[0].arrayBuffer();
+  buffer=await ctx.decodeAudioData(arr);
+};
+
+playBtn.onclick=async ()=>{
+  if(!buffer) return alert("upload audio");
+
+  if(ctx.state==="suspended") await ctx.resume();
+
+  if(!isPlaying){
+    source=ctx.createBufferSource();
+    source.buffer=buffer;
+
+    source.connect(analyser);
+    analyser.connect(ctx.destination); // Plays out loud
+    analyser.connect(dest); // Sends audio to the recorder
+
+    source.start(0,pauseTime);
+    startTime=ctx.currentTime-pauseTime;
+
+    isPlaying=true;
+    playBtn.innerText="Pause";
+  }else{
+    source.stop();
+    pauseTime=ctx.currentTime-startTime;
+
+    isPlaying=false;
+    playBtn.innerText="Play";
+  }
+};
+
+// RECORD
+let rec,chunks=[],recording=false;
+
+recBtn.onclick=()=>{
+  if(!recording){
+    const stream=canvas.captureStream(60);
+    
+    // Grab the audio track we routed and stitch it to the video stream
+    const audioTracks = dest.stream.getAudioTracks();
+    if (audioTracks.length > 0) {
+      stream.addTrack(audioTracks[0]);
+    }
+
+    // Force VP9 Codec for high-motion visuals and bump to 20 Mbps
+    const options = { 
+      mimeType: 'video/webm; codecs=vp9',
+      videoBitsPerSecond: 20000000 
+    };
+    
+    // Fallback just in case the browser doesn't support VP9
+    try {
+      rec = new MediaRecorder(stream, options);
+    } catch (e) {
+      console.warn("VP9 not supported by browser, falling back to default.", e);
+      rec = new MediaRecorder(stream, { videoBitsPerSecond: 20000000 });
+    }
+
+    rec.ondataavailable=e=>chunks.push(e.data);
+    rec.onstop=()=>{
+      const blob=new Blob(chunks,{type:"video/webm"});
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement("a");
+      a.href=url;
+      a.download="anahat_1080p.webm";
+      a.click();
+    };
+
+    rec.start();
+    recording=true;
+    recBtn.innerText="Stop";
+  }else{
+    rec.stop();
+    recording=false;
+    recBtn.innerText="Record";
+    chunks=[];
+  }
+};
+
+// CONTROLS
+let mode=0, drop=0;
+let speed=1.0, zoom=1.0;
+
+document.addEventListener("keydown",e=>{
+  if(e.key>="1"&&e.key<="6") mode=parseInt(e.key)-1;
+  if(e.code==="Space") drop=1;
+
+  if(e.key==="ArrowUp") speed+=0.1;
+  if(e.key==="ArrowDown") speed=Math.max(0.2,speed-0.1);
+
+  if(e.key==="a") zoom+=0.1;
+  if(e.key==="d") zoom=Math.max(0.5,zoom-0.1);
+});
+
+// helper
+function get(s,e){
+  let sum=0;
+  for(let i=s;i<e;i++) sum+=data[i];
+  return sum/(e-s)/255;
+}
+
+// LOOP
+let t=0;
+
+function draw(){
+  requestAnimationFrame(draw);
+
+  analyser.getByteFrequencyData(data);
+
+  let bass=get(0,10);
+  let mids=get(10,40);
+  let highs=get(40,100);
+
+  drop*=0.9;
+  t+=0.02;
+
+  gl.viewport(0,0,canvas.width,canvas.height);
+
+  gl.uniform1f(tLoc,t);
+  gl.uniform1f(bLoc,bass);
+  gl.uniform1f(mLoc,mids);
+  gl.uniform1f(hLoc,highs);
+  gl.uniform1f(modeLoc,mode);
+  gl.uniform1f(dropLoc,drop);
+  gl.uniform1f(speedLoc,speed);
+  gl.uniform1f(zoomLoc,zoom);
+  gl.uniform2f(resLoc,canvas.width,canvas.height);
+
+  gl.drawArrays(gl.TRIANGLES,0,6);
+}
+
+draw();
+</script>
+
+</body>
+</html>
